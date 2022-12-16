@@ -1,3 +1,4 @@
+import sys
 import requests
 #from datetime import date, timedelta
 import pandas as pd
@@ -34,13 +35,19 @@ if __name__ == '__main__':
     print(df.groupby([pd.DatetimeIndex(df['rec_date']).year,pd.DatetimeIndex(df['rec_date']).month]).size())
 
     parser = argparse.ArgumentParser(description='Use your username and password to connect to MySQL')
-    parser.add_argument("user", help="your MySQL username")
-    parser.add_argument("pwd", help="your MySQL password")
+    parser.add_argument("save_to_sql", action='store_true', help="True or False")
+    parser.add_argument("--user", help="your MySQL username")
+    parser.add_argument("--pwd", help="your MySQL password")
     #parser.add_argument("port", type=int, default=3306, help="your MySQL port")
-    parser.add_argument("tablename", help="The table name to which you want to append the data")
-    parser.add_argument("database", default='nzo_db', help="The database to which you want to connect")
-    parser.add_argument("host", default='localhost', help="your MySQL host")
+    parser.add_argument("--tablename", help="The table name to which you want to append the data")
+    parser.add_argument("--database", default='nzo_db', help="The database to which you want to connect")
+    parser.add_argument("--host", default='localhost', help="your MySQL host")
     args = parser.parse_args()
+
+    if args.save_to_sql:
+        if args.user is None or args.pwd is None or args.tablename is None:
+            print("Please make sure to provide username, password and tablename of the SQL DB")
+            return
     database_connection = sqlalchemy.create_engine('mysql+pymysql://{0}:{1}@{2}/{3}'.format(args.user, args.pwd, args.host, args.databases))
     df.to_sql(con=database_connection, name=args.tablename, if_exists='append', index=False)
 

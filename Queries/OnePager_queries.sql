@@ -1,4 +1,38 @@
-#queries for the one pager:
+#QUERIES FOR THE ONE PAGER:
+
+##### NOGA EXPOST ############
+
+select 
+rec_year,
+rec_month,
+sum(renewable_gen_hourly) as renewable_gen_hourly_sum,
+sum(conventional_gen_hourly) as conventional_gen_hourly_sum,
+sum(system_demand_hourly) as system_demand_hourly_sum
+from (
+	select 
+	rec_date,
+	year(rec_date) as rec_year,
+	month(rec_date) as rec_month,
+	rec_time,
+	cost,
+	renewable_gen,
+	renewable_gen*0.5+ (LAG(renewable_gen) over (order by id))*0.5 as renewable_gen_hourly,
+	conventional_gen,
+	conventional_gen*0.5+ (LAG(conventional_gen) over (order by id))*0.5 as conventional_gen_hourly,
+	system_demand,
+	system_demand*0.5+ (LAG(system_demand) over (order by id))*0.5 as system_demand_hourly
+	from (
+		select a.*, 
+		ROW_NUMBER() over (partition by rec_date, rec_time order by id desc) as rn    # To avoid duplicate records
+		from noga_expost_data_raw as a
+	) as b
+	where rn=1
+	order by id
+) as sub
+where rec_time like "%:30:%"
+group by rec_year, rec_month
+
+##### IEC REPLIES ############
 
 select 
 case 	when reply_date between '2021-01-01' and '2021-03-31' then '21-q1'
@@ -74,38 +108,46 @@ from reply_from_iec_inc_enum
 group by reg_code
 order by c
 
-##### connection to the grid ############
+##### CONNECTION TO THE GRID ############
 
 select
 napa_code,
-sum(requested_power_dc)*1.0/1000 as sum_requested_power_dc
+sum(requested_power_kwdc)*1.0/1000 as sum_requested_power_mwdc
 from (
 select
 napa_code,
 reg_code,
 case 	when reg_code in (133, 134, 161) then requested_power*1.3 /*ground*/
-		when reg_code in (140, 141, 142, 160, 250, 300, 301, 305, 308, 310, 311, 312, 350, 378, 941, 942, 946, 964, 969) then requested_power*1.2 /*dual use*/
-        when reg_code in (905) then requested_power /*wind*/
-end as requested_power_dc
+		when reg_code in (140, 141, 142, 160, 250, 260, 300, 301, 305, 308, 310, 311, 312, 313, 350, 378, 918, 941, 942, 946, 964, 969) then requested_power*1.2 /*dual use*/
+        when reg_code in (905, 935) then requested_power /*wind*/
+        else 1000000000 #in case I missed mapping a reg_code
+end as requested_power_kwdc
 from connection_to_the_grid_enum
 where reg_code not in (280, 290) ## without gas reg.
-and operation_start_date>='2022-01-01'
+and operation_start_date>='2022-07-01'
 ) as sub
 group by 1
 order by 1
 
-select sum(requested_power)
+
+# Total Solar connections, Only solar, excluding wind and gas, in DC
+select sum(requested_power_kwdc)
+ from (select 
+case 	when reg_code in (133, 134, 161) then requested_power*1.3 /*ground*/
+		when reg_code in (140, 141, 142, 160, 250, 260, 300, 301, 305, 308, 310, 311, 312, 313, 350, 378, 918, 941, 942, 946, 964, 969) then requested_power*1.2 /*dual use*/
+        else 1000000000 #in case I missed mapping a reg_code
+end as requested_power_kwdc
 from connection_to_the_grid_enum
 where reg_code not in (905, 935, 280, 290) 
-and operation_start_date>='2022-01-01'
-
+and operation_start_date>='2022-07-01'
+) as sub
 
 select reg_code, count(*), sum(requested_power)
 from connection_to_the_grid_enum
 where reg_code not in (280, 290)  and operation_start_date>='2022-01-01'
 group by reg_code
 
-
+select * from connection_to_the_grid_enum where operation_start_date>= '2022-07-01' and requested_power>=1000
 
 
 ##################  SANITY CHECKS ####################################

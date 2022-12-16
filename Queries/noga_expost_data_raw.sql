@@ -17,7 +17,16 @@ describe noga_expost_data_raw
 
 select max(rec_date) from noga_expost_data_raw
 
-select * from noga_expost_data_raw where rec_date >= '2022-07-01'
+select * from noga_expost_data_raw 
+where rec_date = '2022-10-30' and rec_time in ('01:00:00', '01:30:00')
+
+#checking for duplicates:
+select rec_date, rec_time, count(*) as c 
+from noga_expost_data_raw
+group by 1, 2
+having c>1 
+
+
 
 select 
 rec_year,
@@ -26,20 +35,25 @@ sum(renewable_gen_hourly) as renewable_gen_hourly_sum,
 sum(conventional_gen_hourly) as conventional_gen_hourly_sum,
 sum(system_demand_hourly) as system_demand_hourly_sum
 from (
-select 
-rec_date,
-year(rec_date) as rec_year,
-month(rec_date) as rec_month,
-rec_time,
-cost,
-renewable_gen,
-renewable_gen*0.5+ (LAG(renewable_gen) over (order by id))*0.5 as renewable_gen_hourly,
-conventional_gen,
-conventional_gen*0.5+ (LAG(conventional_gen) over (order by id))*0.5 as conventional_gen_hourly,
-system_demand,
-system_demand*0.5+ (LAG(system_demand) over (order by id))*0.5 as system_demand_hourly
-from noga_expost_data_raw
-order by id
+	select 
+	rec_date,
+	year(rec_date) as rec_year,
+	month(rec_date) as rec_month,
+	rec_time,
+	cost,
+	renewable_gen,
+	renewable_gen*0.5+ (LAG(renewable_gen) over (order by id))*0.5 as renewable_gen_hourly,
+	conventional_gen,
+	conventional_gen*0.5+ (LAG(conventional_gen) over (order by id))*0.5 as conventional_gen_hourly,
+	system_demand,
+	system_demand*0.5+ (LAG(system_demand) over (order by id))*0.5 as system_demand_hourly
+	from (
+		select a.*, 
+		ROW_NUMBER() over (partition by rec_date, rec_time order by id desc) as rn
+		from noga_expost_data_raw as a
+	) as b
+	where rn=1
+	order by id
 ) as sub
 where rec_time like "%:30:%"
 group by rec_year, rec_month
@@ -130,6 +144,15 @@ where month(rec_date)=5 and year(rec_date)=2022
 group by 1, 2, 3
 
 select day(rec_date), count(*)
-from noga_expost_data
-where  month(rec_date)=3 and year(rec_date)=2022
+from noga_expost_data_raw
+where  month(rec_date)=8 and year(rec_date)=2022
 group by 1
+
+
+select * from (
+select a.* 
+from noga_expost_data_raw as a
+where  rec_date = '2022-10-30' 
+having ROW_NUMBER() over (partition by rec_date, rec_time order by id desc)=1
+) as b
+where rn = 1 
